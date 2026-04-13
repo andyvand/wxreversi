@@ -15,6 +15,10 @@ Windows, macOS, and Linux/GTK.
 
 ![](/screenshots/wxreversi_win.png)
 
+- Linux:
+
+![](/screenshots/wxreversi_linux.png)
+
 ## Features
 
 - Faithful reproduction of the original Microsoft Reversi gameplay
