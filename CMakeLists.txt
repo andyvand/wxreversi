@@ -27,7 +27,7 @@ host_compile(${CMAKE_CURRENT_SOURCE_DIR}/bin2c.c ${BIN2C})
 
 # wxWidgets core is enough: we only use wxApp, wxFrame, wxPanel, wxDC, wxMenu.
 # xrc + xml are needed to load reversi.xrc (pattern bitmaps) at runtime.
-find_package(wxWidgets REQUIRED COMPONENTS xrc xml core base)
+find_package(wxWidgets REQUIRED COMPONENTS xrc xml html core base)
 
 if(NOT WIN32)
     include(${wxWidgets_USE_FILE})
