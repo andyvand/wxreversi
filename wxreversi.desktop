@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=wxreversi
+GenericName=Microsoft Reversi
+Comment=Microsoft Reversi
+Exec=wxreversi %f
+Icon=wxreversi
+Categories=Game;Board;
+Keywords=Board;Microsoft;Reversi;

@@ -1,0 +1,583 @@
+/****************************************************************************/
+/*                                                                          */
+/*  reversi_wx.cpp                                                          */
+/*                                                                          */
+/*  Portable wxWidgets front-end for the Reversi engine.  Runs on any       */
+/*  platform wxWidgets supports (Windows, macOS, Linux/GTK).                */
+/*                                                                          */
+/*  Original game: Windows Reversi by Chris Peters.                         */
+/*                                                                          */
+/****************************************************************************/
+
+#include <wx/wxprec.h>
+#ifndef WX_PRECOMP
+  #include <wx/wx.h>
+#endif
+#include <wx/dcbuffer.h>
+#include <wx/aboutdlg.h>
+
+#include "reversi_engine.h"
+
+using namespace reversi;
+
+// ---------------------------------------------------------------------------
+//  Menu / command IDs
+// ---------------------------------------------------------------------------
+
+enum {
+    ID_Hint = wxID_HIGHEST + 1,
+    ID_Pass,
+    ID_NewGame,
+    ID_ColorMode,
+
+    ID_SkillBeginner,
+    ID_SkillNovice,
+    ID_SkillExpert,
+    ID_SkillMaster
+};
+
+// ---------------------------------------------------------------------------
+//  BoardPanel - draws the board and handles input.
+// ---------------------------------------------------------------------------
+
+class ReversiFrame;
+
+class BoardPanel : public wxPanel {
+public:
+    BoardPanel(ReversiFrame* parent);
+
+    void newGame();
+    void toggleColorMode();
+    void doHint();
+    void doPass();
+    void setSkill(int depth);
+
+    bool isColor() const { return m_colorMode; }
+
+private:
+    void OnPaint(wxPaintEvent& ev);
+    void OnSize(wxSizeEvent& ev);
+    void OnErase(wxEraseEvent&) { /* buffered paint; suppress flicker */ }
+    void OnLeftDown(wxMouseEvent& ev);
+    void OnMotion(wxMouseEvent& ev);
+    void OnKey(wxKeyEvent& ev);
+    void OnFlashTimer(wxTimerEvent& ev);
+
+    // Geometry.
+    void recomputeLayout(const wxSize& clientSize);
+    wxRect cellRect(int x, int y) const;          // full cell
+    wxRect pieceRect(int x, int y) const;         // inscribed piece
+    bool   cellAt(const wxPoint& pt, int& x, int& y) const;
+
+    // Drawing helpers.
+    void drawBoard(wxDC& dc);
+    void drawPiece(wxDC& dc, int x, int y, std::uint8_t who);
+
+    // Game flow.
+    void handleHumanMove(int x, int y);
+    void computerReply(int humanMove);
+    void checkGameOver(int lastComputerMove);
+    void announce(const wxString& msg);
+
+    ReversiFrame* m_frame;
+    Engine        m_engine;
+
+    // Geometry.
+    int  m_bx     = 0;   // board origin (pixels)
+    int  m_by     = 0;
+    int  m_cellW  = 40;
+    int  m_cellH  = 40;
+
+    // State.
+    bool m_colorMode   = true;
+    bool m_thinking    = false;
+    bool m_firstMove   = true;
+    bool m_cheated     = false;       // used a hint -> "Practice Game" title
+
+    // Hint-flash animation.
+    wxTimer m_flashTimer;
+    int     m_flashX = -1, m_flashY = -1;
+    int     m_flashCount = 0;
+    bool    m_flashShow  = false;
+
+    // Cursors.
+    wxCursor m_curLegal;
+    wxCursor m_curIllegal;
+    wxCursor m_curThink;
+
+    wxDECLARE_EVENT_TABLE();
+};
+
+wxBEGIN_EVENT_TABLE(BoardPanel, wxPanel)
+    EVT_PAINT      (BoardPanel::OnPaint)
+    EVT_SIZE       (BoardPanel::OnSize)
+    EVT_ERASE_BACKGROUND(BoardPanel::OnErase)
+    EVT_LEFT_DOWN  (BoardPanel::OnLeftDown)
+    EVT_MOTION     (BoardPanel::OnMotion)
+    EVT_KEY_DOWN   (BoardPanel::OnKey)
+    EVT_TIMER      (wxID_ANY, BoardPanel::OnFlashTimer)
+wxEND_EVENT_TABLE()
+
+// ---------------------------------------------------------------------------
+//  ReversiFrame
+// ---------------------------------------------------------------------------
+
+class ReversiFrame : public wxFrame {
+public:
+    ReversiFrame();
+
+    void setTitleNormal();
+    void setTitlePractice();
+
+private:
+    void OnNew(wxCommandEvent&)        { m_board->newGame(); setTitleNormal(); }
+    void OnHint(wxCommandEvent&)       { m_board->doHint(); }
+    void OnPass(wxCommandEvent&)       { m_board->doPass(); }
+    void OnColorMode(wxCommandEvent&)  { m_board->toggleColorMode(); }
+    void OnExit(wxCommandEvent&)       { Close(true); }
+    void OnAbout(wxCommandEvent&);
+    void OnSkill(wxCommandEvent& ev);
+
+    BoardPanel* m_board;
+    wxMenuBar*  m_menu;
+
+    wxDECLARE_EVENT_TABLE();
+};
+
+wxBEGIN_EVENT_TABLE(ReversiFrame, wxFrame)
+    EVT_MENU(ID_NewGame,       ReversiFrame::OnNew)
+    EVT_MENU(ID_Hint,          ReversiFrame::OnHint)
+    EVT_MENU(ID_Pass,          ReversiFrame::OnPass)
+    EVT_MENU(ID_ColorMode,     ReversiFrame::OnColorMode)
+    EVT_MENU(wxID_EXIT,        ReversiFrame::OnExit)
+    EVT_MENU(wxID_ABOUT,       ReversiFrame::OnAbout)
+    EVT_MENU(ID_SkillBeginner, ReversiFrame::OnSkill)
+    EVT_MENU(ID_SkillNovice,   ReversiFrame::OnSkill)
+    EVT_MENU(ID_SkillExpert,   ReversiFrame::OnSkill)
+    EVT_MENU(ID_SkillMaster,   ReversiFrame::OnSkill)
+wxEND_EVENT_TABLE()
+
+// ---------------------------------------------------------------------------
+//  ReversiApp
+// ---------------------------------------------------------------------------
+
+class ReversiApp : public wxApp {
+public:
+    bool OnInit() override {
+        if (!wxApp::OnInit())
+            return false;
+        SetAppName("Reversi");
+        auto* frame = new ReversiFrame();
+        frame->Show(true);
+        return true;
+    }
+};
+
+wxIMPLEMENT_APP(ReversiApp);
+
+// ---------------------------------------------------------------------------
+//  ReversiFrame implementation
+// ---------------------------------------------------------------------------
+
+ReversiFrame::ReversiFrame()
+    : wxFrame(nullptr, wxID_ANY, "Reversi",
+              wxDefaultPosition, wxSize(480, 540))
+{
+    // Menu: Game
+    auto* gameMenu = new wxMenu();
+    gameMenu->Append(ID_Hint,       "&Hint\tCtrl-H");
+    gameMenu->Append(ID_Pass,       "&Pass");
+    gameMenu->Append(ID_NewGame,    "&New");
+    gameMenu->Append(ID_ColorMode,  "Change &Color Mode");
+    gameMenu->AppendSeparator();
+    gameMenu->Append(wxID_EXIT,     "E&xit\tAlt-F4");
+
+    // Menu: Skill (radio items)
+    auto* skillMenu = new wxMenu();
+    skillMenu->AppendRadioItem(ID_SkillBeginner, "&Beginner");
+    skillMenu->AppendRadioItem(ID_SkillNovice,   "&Novice");
+    skillMenu->AppendRadioItem(ID_SkillExpert,   "&Expert");
+    skillMenu->AppendRadioItem(ID_SkillMaster,   "&Master");
+    skillMenu->Check(ID_SkillBeginner, true);
+
+    // Menu: Help
+    auto* helpMenu = new wxMenu();
+    helpMenu->Append(wxID_ABOUT, "&About Reversi...");
+
+    m_menu = new wxMenuBar();
+    m_menu->Append(gameMenu,  "&Game");
+    m_menu->Append(skillMenu, "&Skill");
+    m_menu->Append(helpMenu,  "&Help");
+    SetMenuBar(m_menu);
+
+    CreateStatusBar();
+    SetStatusText("Your move.");
+
+    m_board = new BoardPanel(this);
+
+    auto* sizer = new wxBoxSizer(wxVERTICAL);
+    sizer->Add(m_board, 1, wxEXPAND);
+    SetSizer(sizer);
+
+    SetMinClientSize(wxSize(320, 320));
+}
+
+void ReversiFrame::setTitleNormal()   { SetTitle("Reversi"); }
+void ReversiFrame::setTitlePractice() { SetTitle("Reversi Practice Game"); }
+
+void ReversiFrame::OnAbout(wxCommandEvent&)
+{
+    wxAboutDialogInfo info;
+    info.SetName("Reversi");
+    info.SetDescription("Portable wxWidgets port of the classic\n"
+                        "Windows Reversi game by Chris Peters.");
+    info.SetCopyright("(C) Microsoft / Chris Peters\n"
+                      "wxWidgets port 2026");
+    wxAboutBox(info, this);
+}
+
+void ReversiFrame::OnSkill(wxCommandEvent& ev)
+{
+    int depth = 1;
+    switch (ev.GetId()) {
+        case ID_SkillBeginner: depth = 1; break;
+        case ID_SkillNovice:   depth = 2; break;
+        case ID_SkillExpert:   depth = 4; break;
+        case ID_SkillMaster:   depth = 6; break;
+    }
+    m_board->setSkill(depth);
+}
+
+// ---------------------------------------------------------------------------
+//  BoardPanel implementation
+// ---------------------------------------------------------------------------
+
+BoardPanel::BoardPanel(ReversiFrame* parent)
+    : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+              wxWANTS_CHARS | wxFULL_REPAINT_ON_RESIZE),
+      m_frame(parent),
+      m_flashTimer(this)
+{
+    SetBackgroundStyle(wxBG_STYLE_PAINT);   // flicker-free buffered painting
+    m_curLegal   = wxCursor(wxCURSOR_CROSS);
+    m_curIllegal = wxCursor(wxCURSOR_ARROW);
+    m_curThink   = wxCursor(wxCURSOR_WAIT);
+    SetCursor(m_curIllegal);
+
+    m_engine.reset();
+    m_engine.setDepth(1);
+}
+
+void BoardPanel::newGame()
+{
+    m_engine.reset();
+    m_firstMove = true;
+    m_cheated   = false;
+    m_thinking  = false;
+    m_flashTimer.Stop();
+    m_flashX = m_flashY = -1;
+    m_frame->SetStatusText("Your move.");
+    Refresh();
+}
+
+void BoardPanel::toggleColorMode()
+{
+    m_colorMode = !m_colorMode;
+    Refresh();
+}
+
+void BoardPanel::setSkill(int depth)
+{
+    m_engine.setDepth(depth);
+}
+
+// ----- geometry -----
+
+void BoardPanel::recomputeLayout(const wxSize& sz)
+{
+    // Use the shorter side to keep squares square-ish.
+    int side   = std::min(sz.GetWidth(), sz.GetHeight());
+    int cell   = std::max(16, side / 9);    // leave a margin
+    int boardW = cell * 8;
+    int boardH = cell * 8;
+    m_cellW = m_cellH = cell;
+    m_bx = (sz.GetWidth()  - boardW) / 2;
+    m_by = (sz.GetHeight() - boardH) / 2;
+    if (m_bx < 0) m_bx = 0;
+    if (m_by < 0) m_by = 0;
+}
+
+wxRect BoardPanel::cellRect(int x, int y) const
+{
+    return wxRect(m_bx + x * m_cellW, m_by + y * m_cellH, m_cellW, m_cellH);
+}
+
+wxRect BoardPanel::pieceRect(int x, int y) const
+{
+    wxRect r = cellRect(x, y);
+    int pad = std::max(2, r.GetWidth() / 10);
+    r.Deflate(pad, pad);
+    return r;
+}
+
+bool BoardPanel::cellAt(const wxPoint& pt, int& x, int& y) const
+{
+    if (m_cellW <= 0 || m_cellH <= 0) return false;
+    int dx = pt.x - m_bx;
+    int dy = pt.y - m_by;
+    if (dx < 0 || dy < 0) return false;
+    x = dx / m_cellW;
+    y = dy / m_cellH;
+    return (x >= 0 && x < 8 && y >= 0 && y < 8);
+}
+
+// ----- drawing -----
+
+void BoardPanel::drawBoard(wxDC& dc)
+{
+    const wxColour bgColour =
+        m_colorMode ? wxColour(0, 140, 0)     // green felt
+                    : wxColour(255, 255, 255);
+
+    dc.SetBackground(wxBrush(bgColour));
+    dc.Clear();
+
+    // Playing surface.
+    dc.SetBrush(wxBrush(bgColour));
+    dc.SetPen  (wxPen(*wxBLACK, 1));
+    int w = 8 * m_cellW, h = 8 * m_cellH;
+    dc.DrawRectangle(m_bx, m_by, w + 1, h + 1);
+
+    // Grid lines.
+    for (int i = 0; i <= 8; ++i) {
+        dc.DrawLine(m_bx,         m_by + i * m_cellH,
+                    m_bx + w,     m_by + i * m_cellH);
+        dc.DrawLine(m_bx + i * m_cellW, m_by,
+                    m_bx + i * m_cellW, m_by + h);
+    }
+
+    // Pieces.
+    for (int x = 0; x < 8; ++x)
+        for (int y = 0; y < 8; ++y) {
+            std::uint8_t v = m_engine.at(x, y);
+            if (v == HUMAN || v == COMPUTER)
+                drawPiece(dc, x, y, v);
+        }
+
+    // Hint flash: draw an inverted-colour piece on/off.
+    if (m_flashShow && m_flashX >= 0 && m_flashY >= 0) {
+        wxRect pr = pieceRect(m_flashX, m_flashY);
+        dc.SetBrush(wxBrush(m_colorMode ? *wxBLUE : *wxBLACK));
+        dc.SetPen  (wxPen(*wxBLACK, 1));
+        dc.DrawEllipse(pr);
+    }
+}
+
+void BoardPanel::drawPiece(wxDC& dc, int x, int y, std::uint8_t who)
+{
+    wxColour c;
+    if (m_colorMode)
+        c = (who == COMPUTER) ? wxColour(0, 0, 255)
+                              : wxColour(255, 0, 0);
+    else
+        c = (who == COMPUTER) ? *wxBLACK : *wxWHITE;
+
+    dc.SetBrush(wxBrush(c));
+    dc.SetPen  (wxPen(*wxBLACK, 1));
+    dc.DrawEllipse(pieceRect(x, y));
+}
+
+// ----- events -----
+
+void BoardPanel::OnPaint(wxPaintEvent&)
+{
+    wxAutoBufferedPaintDC dc(this);
+    recomputeLayout(GetClientSize());
+    drawBoard(dc);
+}
+
+void BoardPanel::OnSize(wxSizeEvent& ev)
+{
+    recomputeLayout(ev.GetSize());
+    Refresh();
+    ev.Skip();
+}
+
+void BoardPanel::OnMotion(wxMouseEvent& ev)
+{
+    if (m_thinking) {
+        SetCursor(m_curThink);
+        return;
+    }
+    int x, y;
+    if (cellAt(ev.GetPosition(), x, y)) {
+        int move = xyToIndex(x, y);
+        if (Engine::isLegal(&m_engine.at(0), move, HUMAN, COMPUTER)) {
+            SetCursor(m_curLegal);
+            return;
+        }
+    }
+    SetCursor(m_curIllegal);
+}
+
+void BoardPanel::OnLeftDown(wxMouseEvent& ev)
+{
+    if (m_thinking) return;
+    SetFocus();         // so arrow keys work after a click
+
+    int x, y;
+    if (!cellAt(ev.GetPosition(), x, y))
+        return;
+    handleHumanMove(x, y);
+}
+
+void BoardPanel::OnKey(wxKeyEvent& ev)
+{
+    switch (ev.GetKeyCode()) {
+        case WXK_RETURN:
+        case WXK_SPACE: {
+            // Play at the first legal square for simplicity (the original
+            // tracked an on-screen cursor; wx handles focus differently).
+            for (const int* p = MoveOrder; *p; ++p) {
+                if (Engine::isLegal(&m_engine.at(0), *p, HUMAN, COMPUTER)) {
+                    handleHumanMove(indexToX(*p), indexToY(*p));
+                    return;
+                }
+            }
+            break;
+        }
+        default:
+            ev.Skip();
+    }
+}
+
+void BoardPanel::OnFlashTimer(wxTimerEvent&)
+{
+    m_flashShow = !m_flashShow;
+    Refresh();
+    if (++m_flashCount >= 6) {    // 3 on/off cycles
+        m_flashTimer.Stop();
+        m_flashShow = false;
+        m_flashX = m_flashY = -1;
+        Refresh();
+    }
+}
+
+// ----- game flow -----
+
+void BoardPanel::handleHumanMove(int x, int y)
+{
+    int move = xyToIndex(x, y);
+    if (!Engine::isLegal(&m_engine.at(0), move, HUMAN, COMPUTER)) {
+        wxMessageBox(
+            "You may only move to a space where the cursor is a cross.",
+            "Reversi", wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+
+    m_firstMove = false;
+    m_thinking  = true;
+    SetCursor(m_curThink);
+    m_frame->SetStatusText("Thinking...");
+
+    // 1. Place the human move (engine's convention).
+    m_engine.at(move) = HUMAN;
+
+    // 2. Run the search for the computer's reply.
+    int reply = m_engine.searchBestReply(move, HUMAN, COMPUTER);
+
+    // 3. Apply the human move's flips to the ply-0 board.
+    Engine::applyMove(&m_engine.at(0), move, HUMAN, COMPUTER);
+
+    // 4. Apply the computer's reply.
+    if (reply != PASS)
+        Engine::applyMove(&m_engine.at(0), reply, COMPUTER, HUMAN);
+
+    Refresh();
+
+    m_thinking = false;
+    SetCursor(m_curIllegal);
+
+    checkGameOver(reply);
+}
+
+void BoardPanel::checkGameOver(int lastComputerMove)
+{
+    bool humanCanMove = m_engine.hasAnyLegalMove(HUMAN, COMPUTER);
+    bool compCanMove  = m_engine.hasAnyLegalMove(COMPUTER, HUMAN);
+
+    int hc = m_engine.count(HUMAN);
+    int cc = m_engine.count(COMPUTER);
+    m_frame->SetStatusText(
+        wxString::Format("You: %d   Computer: %d", hc, cc));
+
+    if (!humanCanMove) {
+        if (lastComputerMove == PASS || !compCanMove) {
+            // Game over.
+            if      (hc > cc) announce(wxString::Format("You Won by %d", hc - cc));
+            else if (hc < cc) announce(wxString::Format("You Lost by %d", cc - hc));
+            else              announce("Tie Game");
+        } else {
+            announce("You must Pass");
+        }
+    } else if (lastComputerMove == PASS) {
+        announce("Pass");
+    }
+}
+
+void BoardPanel::announce(const wxString& msg)
+{
+    wxMessageBox(msg, "Reversi", wxOK | wxICON_INFORMATION, this);
+}
+
+void BoardPanel::doPass()
+{
+    if (m_thinking) return;
+
+    if (m_engine.hasAnyLegalMove(HUMAN, COMPUTER)) {
+        wxMessageBox("You may not pass.  Move where the cursor is a cross.",
+                     "Reversi", wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+
+    m_thinking = true;
+    SetCursor(m_curThink);
+    m_frame->SetStatusText("Thinking...");
+
+    int reply = m_engine.searchBestReply(PASS, HUMAN, COMPUTER);
+    if (reply != PASS)
+        Engine::applyMove(&m_engine.at(0), reply, COMPUTER, HUMAN);
+
+    Refresh();
+    m_thinking = false;
+    SetCursor(m_curIllegal);
+
+    checkGameOver(reply);
+}
+
+void BoardPanel::doHint()
+{
+    if (m_thinking) return;
+    if (!m_engine.hasAnyLegalMove(HUMAN, COMPUTER))
+        return;
+
+    if (!m_cheated) {
+        m_frame->setTitlePractice();
+        m_cheated = true;
+    }
+
+    int hint;
+    if (m_firstMove) {
+        hint = xyToIndex(4, 2);    // the classic opening hint
+    } else {
+        hint = m_engine.bestMoveHint(HUMAN, COMPUTER);
+    }
+    if (hint == PASS) return;
+
+    m_flashX = indexToX(hint);
+    m_flashY = indexToY(hint);
+    m_flashCount = 0;
+    m_flashShow  = true;
+    Refresh();
+    m_flashTimer.Start(180);
+}

@@ -1,0 +1,40 @@
+#include <windows.h>
+
+#ifdef EMBED_MANIFEST
+1 24 reversi.manifest
+#endif
+
+100 ICON reversi.ico
+
+VS_VERSION_INFO		VERSIONINFO
+FILEVERSION		1,0,0,0
+PRODUCTVERSION    	1,0,0,0
+FILEFLAGSMASK		VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+FILEFLAGS		1
+#else /* NDEBUG */
+FILEFLAGS		0
+#endif /* _DEBUG */
+FILEOS			VOS_NT_WINDOWS32
+FILETYPE		VFT_APP //
+FILESUBTYPE		0	// not used
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904E4"
+    BEGIN
+      VALUE "FileDescription",	"wxreversi\0"
+      VALUE "CompanyName", "Microsoft"
+      VALUE "FileVersion",	"1.0\0"
+      VALUE "InternalName",	"wxreversi.exe\0"
+      VALUE "LegalCopyright",	"(C) Microsoft, all rights reserved\0"
+      VALUE "OriginalFilename",	"wxreversi.exe\0"
+      VALUE "ProductName",	"wxreversi\0"
+      VALUE "ProductVersion",	"1.0\0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0409, 0x04E4
+  END
+END
