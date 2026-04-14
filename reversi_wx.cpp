@@ -264,6 +264,9 @@ void ReversiFrame::OnAbout(wxCommandEvent&)
                         "Windows Reversi game by Chris Peters.");
     info.SetCopyright("(C) Microsoft / Chris Peters\n"
                       "wxWidgets port 2026");
+    wxIcon icon = GetIcon();
+    if (icon.IsOk())
+        info.SetIcon(icon);
     wxAboutBox(info, this);
 }
 
