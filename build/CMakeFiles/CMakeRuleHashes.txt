@@ -1,3 +1,0 @@
-# Hashes of file build rules.
-6a1d53fd6ae5034491f6a42cbd858fb2 reversi.xrs
-07c29e6cdc8107eaf01b6da9d0233693 reversi_xrs.h
