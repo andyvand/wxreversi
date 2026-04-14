@@ -264,9 +264,21 @@ void ReversiFrame::OnAbout(wxCommandEvent&)
                         "Windows Reversi game by Chris Peters.");
     info.SetCopyright("(C) Microsoft / Chris Peters\n"
                       "wxWidgets port 2026");
-    wxIcon icon = GetIcon();
-    if (icon.IsOk())
-        info.SetIcon(icon);
+    // Load the icon from the embedded archive via wxImage -> wxBitmap ->
+    // wxIcon.  Going through wxImage avoids a GTK3 issue where
+    // wxXmlResource::LoadIcon / wxFrame::GetIcon can produce an icon
+    // whose internal pixbuf the native GtkAboutDialog cannot use.
+    wxFileSystem fs;
+    wxFSFile* f = fs.OpenFile("memory:reversi.xrs#zip:wxreversi.png");
+    if (f) {
+        wxImage img(*f->GetStream(), wxBITMAP_TYPE_PNG);
+        delete f;
+        if (img.IsOk()) {
+            wxIcon icon;
+            icon.CopyFromBitmap(wxBitmap(img));
+            info.SetIcon(icon);
+        }
+    }
     wxAboutBox(info, this);
 }
 
