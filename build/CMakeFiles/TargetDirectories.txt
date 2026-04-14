@@ -1,0 +1,4 @@
+/Users/andyvand/Downloads/wxreversi/build/CMakeFiles/bin2c.dir
+/Users/andyvand/Downloads/wxreversi/build/CMakeFiles/wxreversi.dir
+/Users/andyvand/Downloads/wxreversi/build/CMakeFiles/edit_cache.dir
+/Users/andyvand/Downloads/wxreversi/build/CMakeFiles/rebuild_cache.dir

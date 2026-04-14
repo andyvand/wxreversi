@@ -15,6 +15,7 @@
 #endif
 #include <wx/dcbuffer.h>
 #include <wx/aboutdlg.h>
+#include <wx/generic/aboutdlgg.h>
 #include <wx/xrc/xmlres.h>
 #include <wx/fs_mem.h>
 #include <wx/fs_arc.h>
@@ -279,7 +280,7 @@ void ReversiFrame::OnAbout(wxCommandEvent&)
             info.SetIcon(icon);
         }
     }
-    wxAboutBox(info, this);
+    wxGenericAboutBox(info, this);
 }
 
 void ReversiFrame::OnSkill(wxCommandEvent& ev)
