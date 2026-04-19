@@ -96,29 +96,77 @@ list(APPEND SOURCES ${REVERSI_XRS_HEADER})
 if(WIN32)
     # GUI subsystem on Windows (no console window).
     add_executable(wxreversi WIN32 ${SOURCES} reversi.rc)
+
+    # Deploy wxreversi.chm next to the executable so the Help menu can
+    # find it (ShellExecute via wxLaunchDefaultApplication).
+    add_custom_command(TARGET wxreversi POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/wxreversi.chm
+            $<TARGET_FILE_DIR:wxreversi>/wxreversi.chm
+        COMMENT "Copying wxreversi.chm next to wxreversi.exe"
+        VERBATIM
+    )
+    install(TARGETS wxreversi RUNTIME DESTINATION .)
+    install(FILES   ${CMAKE_CURRENT_SOURCE_DIR}/wxreversi.chm DESTINATION .)
 elseif(APPLE)
+    enable_language(OBJCXX)
+
     set(MACOSX_BUNDLE_ICON_FILE reversi.icns)
     set(REVERSI_ICON ${CMAKE_CURRENT_SOURCE_DIR}/reversi.icns)
     set_source_files_properties(${REVERSI_ICON} PROPERTIES
         MACOSX_PACKAGE_LOCATION "Resources"
     )
+
+    list(APPEND SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/help_mac.mm)
+
     add_executable(wxreversi MACOSX_BUNDLE
         ${SOURCES}
         ${REVERSI_ICON}
     )
     set_target_properties(wxreversi PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST         ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
         MACOSX_BUNDLE_BUNDLE_NAME        "Reversi"
         MACOSX_BUNDLE_GUI_IDENTIFIER     "org.classic.reversi"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
         MACOSX_BUNDLE_BUNDLE_VERSION     "1.0"
         MACOSX_BUNDLE_ICON_FILE          "reversi.icns"
     )
+    target_link_libraries(wxreversi PRIVATE "-framework AppKit" "-framework Foundation")
+
+    # Copy the wxreversi.help bundle into Contents/Resources and rebuild
+    # its search index. CFBundleHelpBookFolder/Name in Info.plist wire it
+    # up so -[NSApplication showHelp:] finds it.
+    set(REVERSI_HELP_SRC ${CMAKE_CURRENT_SOURCE_DIR}/wxreversi.help)
+    set(REVERSI_HELP_DST $<TARGET_BUNDLE_CONTENT_DIR:wxreversi>/Resources/wxreversi.help)
+    add_custom_command(TARGET wxreversi POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rm -rf ${REVERSI_HELP_DST}
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${REVERSI_HELP_SRC} ${REVERSI_HELP_DST}
+        COMMENT "Copying wxreversi.help into app bundle"
+        VERBATIM
+    )
+    find_program(HIUTIL_EXECUTABLE hiutil)
+    if(HIUTIL_EXECUTABLE)
+        add_custom_command(TARGET wxreversi POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E rm -f
+                ${REVERSI_HELP_DST}/Contents/Resources/en.lproj/wxReversi.helpindex
+            COMMAND ${HIUTIL_EXECUTABLE} -Cagvf
+                ${REVERSI_HELP_DST}/Contents/Resources/en.lproj/wxReversi.helpindex
+                -s en -l en
+                ${REVERSI_HELP_DST}/Contents/Resources/en.lproj
+            COMMENT "Rebuilding Help Viewer search index with hiutil"
+            VERBATIM
+        )
+    endif()
 elseif(UNIX)
     add_executable(wxreversi ${SOURCES})
     install(TARGETS wxreversi RUNTIME DESTINATION bin)
     install(FILES     ${CMAKE_CURRENT_SOURCE_DIR}/wxreversi.desktop      DESTINATION share/applications)
     install(FILES     ${CMAKE_CURRENT_SOURCE_DIR}/wxreversi.metainfo.xml DESTINATION share/metainfo)
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/sizes/                 DESTINATION share/icons/hicolor)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/wxreversi.help/
+                      DESTINATION share/wxreversi/wxreversi.help)
+    install(FILES     ${CMAKE_CURRENT_SOURCE_DIR}/wxreversi.6           DESTINATION share/man/man6)
 else()
     add_executable(wxreversi ${SOURCES})
 endif()

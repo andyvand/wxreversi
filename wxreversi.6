@@ -1,0 +1,140 @@
+.\" wxreversi.6 - manual page for wxReversi
+.\" Content derived from the original Windows Reversi help (wxreversichm).
+.TH WXREVERSI 6 "April 2026" "wxReversi 1.0" "Games"
+.SH NAME
+wxreversi \- portable wxWidgets port of the classic Windows Reversi game
+.SH SYNOPSIS
+.B wxreversi
+.SH DESCRIPTION
+.B wxReversi
+is a cross-platform port of the Reversi game that shipped with early
+versions of Microsoft Windows. You play the red circles; the computer
+plays the blue circles. (On monochrome displays, red shows as white and
+blue as black.) The object of the game is to finish with more of your
+circles on the board than the computer has of its own.
+.PP
+Playing Reversi involves three things: choosing a skill level, making a
+move, and (optionally) asking the computer for a hint. Each of these is
+described below.
+.SH PLAYING THE GAME
+.SS Choosing a Skill Level
+Select a skill level from the
+.B Skill
+menu. The higher the skill level, the longer the computer spends
+calculating its moves.
+.SS Making a Move
+.IP 1. 4
+Move the pointer to a free square. The pointer changes to a cross if you
+can make a legal move. To make a legal move, at least one of the
+computer's circles must lie in a horizontal, vertical, or diagonal line
+between one of your existing circles and the square where you want to
+move.
+.IP 2. 4
+Click the square where you want to move, or press
+.BR Return .
+.IP 3. 4
+Wait for the computer to move. Then make another move.
+.SS Getting a Hint
+Choose
+.B Hint
+from the
+.B Game
+menu. The hint depends on the skill level selected. At higher skill
+levels, the computer takes more time before offering a hint. You can
+accept the suggestion or move elsewhere.
+.SS Passing Your Turn
+Choose
+.B Pass
+from the
+.B Game
+menu. You can pass on your first move to force the computer to play
+first. After that, you cannot pass if you can make a legal move.
+.SS Starting a New Game
+Choose
+.B New
+from the
+.B Game
+menu.
+.SH KEYBOARD
+Use the following keys to play Reversi:
+.TP
+direction keys
+Move the pointer.
+.TP
+.B Return
+or
+.B Space
+Make a move.
+.SH GAME MENU
+.TP
+.B Hint
+Suggests a move for you. A cross appears over the square the computer
+would choose if it were its turn to play. You can accept the suggestion
+or move elsewhere.
+.TP
+.B Pass
+Skips your turn, giving the move to the computer. You can pass on your
+first move to force the computer to make the first play. After that, you
+may pass only when you cannot make a legal move.
+.TP
+.B New
+Starts a new game. You may start a new game at any time, even before you
+finish the current one.
+.TP
+.B Exit
+Exits wxReversi.
+.SH SKILL MENU
+The
+.B Skill
+commands set how deeply the computer searches for its moves. The higher
+the skill level, the more time the computer spends calculating.
+.TP
+.B Beginner
+The lowest skill level.
+.TP
+.B Novice
+The second lowest skill level.
+.TP
+.B Expert
+The second highest skill level.
+.TP
+.B Master
+The highest skill level.
+.SH RULES
+.IP 1. 4
+You and the computer play by the same rules.
+.IP 2. 4
+To make a legal move, you must choose a square in which the pointer
+changes to a cross.
+.IP 3. 4
+You can pass on your first move to force the computer to play first.
+.IP 4. 4
+After your first move, you cannot pass if you can make a legal move.
+.IP 5. 4
+If you cannot make a legal move, you must choose
+.B Pass
+from the
+.B Game
+menu.
+.IP 6. 4
+When neither you nor the computer can make a move, the game is over.
+.IP 7. 4
+The player with the most circles wins.
+.SH FILES
+.TP
+.I /usr/share/wxreversi/wxreversi.help
+HTML help bundle (same content as this manual page, viewable in a
+browser via the Help menu).
+.TP
+.I /usr/share/applications/wxreversi.desktop
+Desktop entry for the application menu.
+.SH SEE ALSO
+.BR othello (6)
+.SH AUTHORS
+Original game: Microsoft / Chris Peters.
+.br
+wxWidgets port: Andy Vandijck.
+.SH COPYRIGHT
+.B wxReversi
+is a portable wxWidgets port of the classic Windows Reversi game.
+See the project's LICENSE file for license terms.
